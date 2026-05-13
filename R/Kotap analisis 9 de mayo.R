@@ -51,8 +51,8 @@ suppressPackageStartupMessages({
 # ==============================================================================
 # SECCIÓN 1 ─ CONFIGURACIÓN GLOBAL
 # ==============================================================================
-DATA_PATH  <- "C:/Users/norba/Downloads/KoTaP_Dataset.csv"
-OUTPUT_DIR <- "C:/Users/norba/Downloads/output_kotap_v14"
+DATA_PATH  <- "data/KoTaP_Dataset.csv"
+OUTPUT_DIR <- "output/output_kotap_v14"
 dir.create(OUTPUT_DIR, showWarnings = FALSE, recursive = TRUE)
 
 cat(sprintf("  CSV   : %s\n", DATA_PATH))
