@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exposición: Análisis KoTaP</title>
+    <!-- CSS de Reveal.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reset.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/theme/simple.min.css" id="theme">
+    <style>
+        .reveal h1, .reveal h2, .reveal h3 {
+            color: #0F172A; /* PAL$dark */
+            font-weight: bold;
+        }
+        .reveal .slide-background {
+            background-color: #F8FAFC;
+        }
+        .highlight-teal { color: #0D9488; }
+        .highlight-orange { color: #F97316; }
+        .img-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 60vh;
+        }
+        .img-container img {
+            max-height: 100%;
+            max-width: 100%;
+            object-fit: contain;
+            border: 1px solid #CBD5E1;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .small-text { font-size: 0.6em; color: #475569; }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+
+            <!-- PORTADA -->
+            <section>
+                <h1>Análisis Financiero KoTaP</h1>
+                <h3>Modelado y Segmentación del ROA</h3>
+                <p style="margin-top: 50px; font-size: 1.2em;">Presentado por: <strong>Ángel</strong></p>
+                <p class="small-text">Dataset: Empresas del Mercado Coreano</p>
+            </section>
+
+            <!-- EDA -->
+            <section>
+                <section>
+                    <h2>1. Análisis Exploratorio (EDA)</h2>
+                    <p>Se realizó un tratamiento conservador de <span class="highlight-orange">outliers (IQR x3)</span> para preservar la integridad de los datos financieros reales.</p>
+                    <ul>
+                        <li>Análisis de asimetría y curtosis (colas pesadas).</li>
+                        <li>Evaluación robusta de tendencias mediante <strong>Spearman</strong>.</li>
+                    </ul>
+                </section>
+                <section>
+                    <h3>Distribución y Correlación</h3>
+                    <div class="img-container">
+                        <!-- Carga la imagen de resumen descriptivo o correlación -->
+                        <img src="output_kotap_v6/corr_spearman.png" alt="Matriz Spearman">
+                    </div>
+                    <p class="small-text">Asociaciones rankeadas, omitiendo el ruido de valores extremos.</p>
+                </section>
+            </section>
+
+            <!-- PCA -->
+            <section>
+                <section>
+                    <h2>2. Componentes Principales (PCA)</h2>
+                    <p>Reducción dimensional para entender la estructura subyacente de las empresas sin sesgos de escala.</p>
+                    <ul>
+                        <li>Selección de componentes mediante <strong>Criterio de Kaiser</strong> (Eigenvalor ≥ 1).</li>
+                        <li>Análisis de varianza acumulada (buscando umbrales del 80%-90%).</li>
+                    </ul>
+                </section>
+                <section>
+                    <h3>Biplot (PC1 vs PC2)</h3>
+                    <div class="img-container">
+                        <img src="output_kotap_v6/pca_biplot.png" alt="Biplot PCA">
+                    </div>
+                    <p class="small-text">Agrupación espacial de las empresas y vectores directores de variables.</p>
+                </section>
+            </section>
+
+            <!-- K-MEANS -->
+            <section>
+                <section>
+                    <h2>3. Clustering K-Means</h2>
+                    <p>Identificación de tipologías de empresas basada en distancias euclidianas sobre las componentes principales.</p>
+                    <ul>
+                        <li>Selección del K óptimo mediante el <strong>Método del Codo (Inercia)</strong>.</li>
+                    </ul>
+                </section>
+                <section>
+                    <h3>Mapeo de Clusters</h3>
+                    <div class="img-container">
+                        <img src="output_kotap_v6/kmeans_2d.png" alt="Clusters K-Means 2D">
+                    </div>
+                </section>
+            </section>
+
+            <!-- BOXPLOTS (PERFILES) -->
+            <section>
+                <section>
+                    <h2>4. Perfiles de Clusters</h2>
+                    <p>¿Qué caracteriza financieramente a cada grupo?</p>
+                    <p>Se utilizan <span class="highlight-teal">Boxplots con muescas</span> para evaluar diferencias estadísticamente significativas en las medianas (IC 95%).</p>
+                </section>
+                <section>
+                    <h3>Distribución Financiera por Cluster</h3>
+                    <div class="img-container">
+                        <img src="output_kotap_v6/kmeans_perfiles.png" alt="Perfiles Boxplot">
+                    </div>
+                    <p class="small-text">Verde: Ganancia (Mediana ≥ 0) | Rojo: Pérdida (Mediana < 0)</p>
+                </section>
+            </section>
+
+            <!-- MODELOS -->
+            <section>
+                <section>
+                    <h2>5. Modelo de Regresión</h2>
+                    <p>Regresión Lineal Múltiple por OLS para inferir los determinantes principales del rendimiento (ROA).</p>
+                    <ul>
+                        <li>Evaluación de ajuste: R² y RMSE.</li>
+                        <li>Importancia de variables: Análisis de <strong>Betas Estandarizados (β*)</strong>.</li>
+                    </ul>
+                </section>
+                <section>
+                    <h3>Desempeño e Impacto de Variables</h3>
+                    <div class="img-container">
+                        <img src="output_kotap_v6/ols_regresion.png" alt="Panel Regresión">
+                    </div>
+                    <p class="small-text">Predicción vs Realidad y peso relativo de las variables independientes.</p>
+                </section>
+            </section>
+
+            <!-- CIERRE -->
+            <section>
+                <h2>Conclusiones</h2>
+                <ul>
+                    <li>Las métricas robustas (Spearman, Medianas) son clave en contextos corporativos.</li>
+                    <li>La segmentación no supervisada revela comportamientos ocultos en los estados financieros.</li>
+                    <li>Los predictores clave del ROA quedan evidenciados tras depurar el efecto escala y los valores anómalos.</li>
+                </ul>
+                <h3 style="margin-top: 40px;" class="highlight-teal">¡Gracias!</h3>
+            </section>
+
+        </div>
+    </div>
+
+    <!-- Scripts de Reveal.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.js"></script>
+    <script>
+        Reveal.initialize({
+            controls: true,
+            progress: true,
+            center: true,
+            hash: true,
+            transition: 'slide', // none/fade/slide/convex/concave/zoom
+        });
+    </script>
+</body>
+</html>

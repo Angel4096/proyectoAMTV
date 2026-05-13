@@ -1,0 +1,26 @@
+# R
+.Rhistory
+.RDataTmp
+.RData
+.Ruserdata
+*.Rproj.user/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+.pytest_cache/
+
+# Dataset (datos sensibles no se versionan)
+data/
+*.csv
+*.xlsx
+*.xls
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

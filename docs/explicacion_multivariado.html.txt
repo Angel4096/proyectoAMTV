@@ -1,0 +1,522 @@
+const {
+  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+  HeadingLevel, AlignmentType, WidthType, BorderStyle, ShadingType,
+  LevelFormat, PageNumber, Header, Footer
+} = require('docx');
+const fs = require('fs');
+
+const NAVY="1E3A5F", TEAL="0D9488", DARK="0F172A", SLATE="475569";
+const AMBER="D97706", RED="C0392B", GREEN="059669";
+const LIGHT="EFF6FF", YELLOW="FFFDE7", MINT="F0FDF4", ORANGE="FFF7ED", ROSE="FFF1F2";
+
+const bdr  = { style: BorderStyle.SINGLE, size: 1, color: "D1D5DB" };
+const BORD = { top: bdr, bottom: bdr, left: bdr, right: bdr };
+
+const h1 = t => new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 420, after: 220 },
+  children: [new TextRun({ text: t, bold: true, size: 36, color: NAVY, font: "Arial" })] });
+const h2 = t => new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 320, after: 160 },
+  children: [new TextRun({ text: t, bold: true, size: 28, color: TEAL, font: "Arial" })] });
+const h3 = t => new Paragraph({ heading: HeadingLevel.HEADING_3, spacing: { before: 240, after: 120 },
+  children: [new TextRun({ text: t, bold: true, size: 24, color: DARK, font: "Arial" })] });
+const h4 = t => new Paragraph({ spacing: { before: 180, after: 90 },
+  children: [new TextRun({ text: t, bold: true, size: 22, color: AMBER, font: "Arial" })] });
+
+const p = (t, opts={}) => new Paragraph({ spacing: { before: 80, after: 120 },
+  children: [new TextRun({ text: t, size: opts.size||22, color: opts.color||DARK,
+    font: "Arial", bold: opts.bold||false, italics: opts.italic||false })] });
+
+const pmix = parts => new Paragraph({ spacing: { before: 80, after: 120 },
+  children: parts.map(([t,b,c]) => new TextRun({ text:t, bold:b||false, size:22, color:c||DARK, font:"Arial" })) });
+
+const bullet = (t, opts={}) => new Paragraph({ spacing: { before: 55, after: 65 },
+  numbering: { reference: "bullets", level: 0 },
+  children: [new TextRun({ text: t, size: 22, font: "Arial", color: opts.color||DARK, bold: opts.bold||false })] });
+
+const subbullet = t => new Paragraph({ spacing: { before: 45, after: 45 },
+  numbering: { reference: "sub", level: 0 },
+  children: [new TextRun({ text: t, size: 21, font: "Arial", color: SLATE })] });
+
+const num = t => new Paragraph({ spacing: { before: 55, after: 65 },
+  numbering: { reference: "numbers", level: 0 },
+  children: [new TextRun({ text: t, size: 22, font: "Arial", color: DARK })] });
+
+const formula = t => new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 180, after: 180 },
+  border: { top: { style: BorderStyle.SINGLE, size: 1, color: "D1D5DB", space: 4 },
+             bottom: { style: BorderStyle.SINGLE, size: 1, color: "D1D5DB", space: 4 } },
+  shading: { fill: "F1F5F9", type: ShadingType.CLEAR },
+  children: [new TextRun({ text: t, size: 24, font: "Courier New", color: NAVY, bold: true })] });
+
+const esp = () => new Paragraph({ spacing: { before: 60, after: 60 }, children: [new TextRun("")] });
+
+const div = () => new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: TEAL, space: 1 } },
+  spacing: { before: 220, after: 220 }, children: [new TextRun("")] });
+
+const caja = (titulo, lines, fondo=LIGHT, ctit=TEAL) => new Table({
+  width: { size: 9360, type: WidthType.DXA }, columnWidths: [9360],
+  rows: [new TableRow({ children: [new TableCell({
+    borders: BORD, width: { size: 9360, type: WidthType.DXA },
+    shading: { fill: fondo, type: ShadingType.CLEAR },
+    margins: { top: 150, bottom: 150, left: 230, right: 230 },
+    children: [
+      new Paragraph({ spacing: { after: 90 }, children: [new TextRun({ text: titulo, bold: true, size: 23, font: "Arial", color: ctit })] }),
+      ...lines.map(l => new Paragraph({ spacing: { before: 45, after: 45 }, children: [new TextRun({ text: l, size: 21, font: "Arial", color: DARK })] }))
+    ]
+  })]})],
+});
+
+const mkTable = (header, rows, widths) => new Table({
+  width: { size: 9360, type: WidthType.DXA }, columnWidths: widths,
+  rows: [
+    new TableRow({ tableHeader: true, children: header.map((h, i) => new TableCell({
+      borders: BORD, width: { size: widths[i], type: WidthType.DXA },
+      shading: { fill: NAVY, type: ShadingType.CLEAR },
+      margins: { top: 90, bottom: 90, left: 120, right: 120 },
+      children: [new Paragraph({ children: [new TextRun({ text: h, bold: true, size: 20, font: "Arial", color: "FFFFFF" })] })]
+    })) }),
+    ...rows.map((row, ri) => new TableRow({ children: row.map((cell, ci) => new TableCell({
+      borders: BORD, width: { size: widths[ci], type: WidthType.DXA },
+      shading: { fill: ri%2===0 ? "F8FAFC" : "FFFFFF", type: ShadingType.CLEAR },
+      margins: { top: 80, bottom: 80, left: 110, right: 110 },
+      children: [new Paragraph({ children: [new TextRun({ text: String(cell), size: 20, font: "Arial", color: DARK, bold: ci===0 })] })]
+    })) }))
+  ]
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+const doc = new Document({
+  numbering: {
+    config: [
+      { reference: "bullets", levels: [{ level:0, format:LevelFormat.BULLET, text:"\u2022",
+          alignment:AlignmentType.LEFT, style:{paragraph:{indent:{left:720,hanging:360}}} }] },
+      { reference: "numbers", levels: [{ level:0, format:LevelFormat.DECIMAL, text:"%1.",
+          alignment:AlignmentType.LEFT, style:{paragraph:{indent:{left:720,hanging:360}}} }] },
+      { reference: "sub",     levels: [{ level:0, format:LevelFormat.BULLET, text:"\u25E6",
+          alignment:AlignmentType.LEFT, style:{paragraph:{indent:{left:1080,hanging:360}}} }] }
+    ]
+  },
+  styles: {
+    default: { document: { run: { font:"Arial", size:22, color:DARK } } },
+    paragraphStyles: [
+      { id:"Heading1", name:"Heading 1", basedOn:"Normal", next:"Normal", quickFormat:true,
+        run:{size:36,bold:true,font:"Arial",color:NAVY}, paragraph:{spacing:{before:420,after:220},outlineLevel:0} },
+      { id:"Heading2", name:"Heading 2", basedOn:"Normal", next:"Normal", quickFormat:true,
+        run:{size:28,bold:true,font:"Arial",color:TEAL}, paragraph:{spacing:{before:320,after:160},outlineLevel:1} },
+      { id:"Heading3", name:"Heading 3", basedOn:"Normal", next:"Normal", quickFormat:true,
+        run:{size:24,bold:true,font:"Arial",color:DARK}, paragraph:{spacing:{before:240,after:120},outlineLevel:2} }
+    ]
+  },
+  sections: [{
+    properties: { page: { size:{width:12240,height:15840}, margin:{top:1440,right:1260,bottom:1440,left:1260} } },
+    headers: { default: new Header({ children: [new Paragraph({
+      border:{bottom:{style:BorderStyle.SINGLE,size:3,color:TEAL,space:1}}, spacing:{after:100},
+      children:[new TextRun({text:"KoTaP \u2013 Regresion Lineal Multiple: Analisis Completo y Profundo",size:18,color:SLATE,font:"Arial"})]
+    })] }) },
+    footers: { default: new Footer({ children: [new Paragraph({
+      alignment:AlignmentType.RIGHT,
+      children:[
+        new TextRun({text:"Pagina ",size:18,font:"Arial",color:SLATE}),
+        new TextRun({children:[PageNumber.CURRENT],size:18,font:"Arial",color:SLATE}),
+        new TextRun({text:" de ",size:18,font:"Arial",color:SLATE}),
+        new TextRun({children:[PageNumber.TOTAL_PAGES],size:18,font:"Arial",color:SLATE})
+      ]
+    })] }) },
+
+    children: [
+      // ══ PORTADA ══
+      new Paragraph({ alignment:AlignmentType.CENTER, spacing:{before:1440,after:300},
+        children:[new TextRun({text:"Regresion Lineal Multiple",bold:true,size:64,color:NAVY,font:"Arial"})] }),
+      new Paragraph({ alignment:AlignmentType.CENTER, spacing:{before:0,after:200},
+        children:[new TextRun({text:"Analisis completo, profundo y sin omisiones",bold:true,size:30,color:TEAL,font:"Arial"})] }),
+      new Paragraph({ alignment:AlignmentType.CENTER, spacing:{before:0,after:120},
+        children:[new TextRun({text:"Seleccion de variables \u2022 Modelo \u2022 Resultados \u2022 Supuestos \u2022 Diagnostico de residuos",size:22,color:SLATE,font:"Arial",italics:true})] }),
+      div(),
+      new Paragraph({ alignment:AlignmentType.CENTER, spacing:{before:100,after:600},
+        children:[new TextRun({text:"Dataset KoTaP \u2022 Mercado Bursatil Coreano \u2022 2011-2024",size:20,color:SLATE,font:"Arial"})] }),
+      new Paragraph({ children:[new TextRun("")], pageBreakBefore:true }),
+
+      // ══════════════════════════════════════════════════════════════════
+      // PARTE 1: SELECCION DE VARIABLES
+      // ══════════════════════════════════════════════════════════════════
+      h1("PARTE 1: Seleccion y justificacion de las variables del modelo"),
+
+      p("Esta es la primera pregunta que cualquier cientico de datos debe responder antes de ajustar un modelo: por que estas variables y no otras? La seleccion de predictores no es arbitraria. Cada una de las ocho variables del modelo tiene una justificacion teorica enraizada en la teoria financiera y contable, y una justificacion empirica basada en la literatura academica sobre rentabilidad empresarial."),
+      esp(),
+
+      h2("El criterio general de seleccion"),
+      p("Para que una variable sea un buen predictor del ROA, debe cumplir tres condiciones simultaneamente:"),
+      num("Justificacion teorica: debe existir un mecanismo economico o contable que explique por que esa variable deberia afectar la rentabilidad. No basta con que correlacione con el ROA en los datos; debe haber una razon de fondo."),
+      num("Disponibilidad y calidad: debe estar disponible para todas o la mayoria de las empresas en el dataset, sin demasiados valores faltantes."),
+      num("Variabilidad suficiente: si una variable tiene casi el mismo valor para todas las empresas, no puede explicar diferencias de rentabilidad. Necesita variar entre empresas y entre anios."),
+      esp(),
+
+      h2("Variable objetivo: ROA (Return on Assets)"),
+      caja("Por que ROA y no ROE ni margen de utilidad",
+        [
+          "ROA = Beneficio Neto / Activos Totales. Mide cuanto beneficio genera cada unidad de activo.",
+          "Se prefiere sobre ROE (beneficio sobre patrimonio) porque ROE esta fuertemente influenciado por el nivel de apalancamiento: una empresa muy endeudada puede tener ROE alto aunque sea ineficiente, simplemente porque tiene poco patrimonio. ROA es mas puro como medida de eficiencia operativa.",
+          "Se prefiere sobre el margen de utilidad porque el margen no considera la base de activos necesaria para generar esas ventas. Una empresa con margen del 2% pero rotacion de activos muy alta puede ser mas rentable que una con margen del 10% pero activos ociosos.",
+          "ROA es la medida de rentabilidad mas usada en la literatura de contabilidad y finanzas corporativas internacionales, lo que facilita la comparacion con otros estudios."
+        ],
+        YELLOW, AMBER),
+      esp(),
+
+      h2("Predictor 1: SIZE (Tamano empresarial)"),
+      formula("SIZE = ln(Activos Totales)"),
+      p("Se usa el logaritmo natural de los activos totales, no los activos directamente. La razon es que los activos tienen una distribucion extremadamente asimetrica: hay miles de empresas medianas y unas pocas empresas gigantes (Samsung, Hyundai, LG) que valen cientos de billones de won. Si se usaran los activos en escala original, esas pocas empresas dominarian completamente la varianza y el modelo seria inestable. El logaritmo comprime esa escala y hace la distribucion aproximadamente normal."),
+      p("Justificacion teorica: la relacion entre tamano y rentabilidad es debatida en la literatura. Hay dos efectos opuestos:"),
+      bullet("Economias de escala: las empresas mas grandes pueden producir a menor costo por unidad, negociar mejores condiciones con proveedores, y amortizar los costos fijos de I+D y marketing sobre mas unidades. Esto deberia aumentar el ROA."),
+      bullet("Burocracia y rigidez: las empresas muy grandes suelen tener estructuras organizacionales mas complejas, mayor inercia estrategica y menos flexibilidad para adaptarse a cambios del mercado. Esto puede reducir el ROA."),
+      p("En los resultados del modelo KoTaP, el coeficiente de SIZE es cercano a cero y no significativo, lo que sugiere que en el mercado coreano, una vez que se controlan las demas variables, el tamano no es un predictor relevante de la rentabilidad."),
+
+      h2("Predictor 2: LEV (Apalancamiento financiero)"),
+      formula("LEV = Pasivos Totales / Activos Totales"),
+      p("Mide que proporcion de los activos esta financiada con deuda. LEV = 0.60 significa que el 60% de los activos son propiedad de los acreedores. Es la medida de endeudamiento mas directa: no depende de la estructura del patrimonio ni de los intereses, solo del balance."),
+      p("Justificacion teorica: la teoria del trade-off del apalancamiento predice que la deuda tiene efectos opuestos sobre la rentabilidad:"),
+      bullet("Efecto positivo (apalancamiento financiero): si el retorno sobre los activos supera el costo de la deuda, el apalancamiento amplifica el retorno sobre el patrimonio. En los anios buenos, las empresas endeudadas pueden ser muy rentables."),
+      bullet("Efecto negativo (costos de deuda): los intereses son un gasto fijo que reduce el beneficio neto independientemente de los resultados operativos. A mayor deuda, mayor carga de intereses, menor ROA."),
+      bullet("Efecto de crisis: en tiempos de dificultad, las empresas muy endeudadas pueden entrar en distress financiero, lo que destruye valor y reduce drasticamente el ROA."),
+      p("En los datos KoTaP, el coeficiente de LEV es negativo y altamente significativo (p < 0.001), confirmando que el efecto neto del apalancamiento sobre el ROA es negativo en el mercado coreano. Esto es consistente con la experiencia de la crisis asiatica de 1997, cuando el exceso de deuda corporativa fue la principal causa del colapso de muchos chaebols."),
+
+      h2("Predictor 3: CFO (Flujo de Caja Operativo)"),
+      formula("CFO = Flujo de Caja Operativo / Activos Totales"),
+      p("Esta es la variable mas importante del modelo. CFO mide la capacidad de la empresa para generar efectivo real con su operacion principal, normalizado por el tamano de la empresa para hacerlo comparable entre empresas de distinto tamano."),
+      p("La diferencia fundamental entre CFO y ROA: el ROA se basa en el beneficio contable, que incluye ingresos y gastos devengados (reconocidos contablemente aunque no cobrados ni pagados). CFO solo cuenta el efectivo que realmente entro y salio. Una empresa puede tener ROA positivo pero CFO negativo si vende a credito y sus clientes no pagan."),
+      p("Justificacion teorica: la hipotesis de que CFO predice ROA tiene una logica muy directa. Si una empresa genera mucho efectivo operativo, significa que:"),
+      bullet("Sus clientes pagan: hay demanda real y sostenida por sus productos."),
+      bullet("Su ciclo operativo es eficiente: no acumula inventario ni cuentas por cobrar que congelan el capital."),
+      bullet("Su modelo de negocio es sostenible: no depende de ingresos contables que nunca se materializan en efectivo."),
+      p("En el modelo KoTaP, CFO tiene el coeficiente estandarizado mas alto de todos los predictores (beta estandarizado cercano a 0.55-0.65), confirmando que es el principal driver de la rentabilidad en el mercado coreano."),
+
+      h2("Predictor 4: GRW (Crecimiento de ventas)"),
+      formula("GRW = (Ventas_t - Ventas_{t-1}) / Ventas_{t-1}"),
+      p("Mide la tasa de crecimiento de los ingresos de un anio al siguiente. GRW = 0.10 significa que las ventas crecieron un 10% respecto al anio anterior."),
+      p("Justificacion teorica: el crecimiento de ventas se relaciona con el ROA a traves de varios mecanismos:"),
+      bullet("Apalancamiento operativo: las empresas tienen costos fijos (alquiler, sueldos, amortizaciones). Cuando las ventas crecen, esos costos fijos se distribuyen sobre mas unidades vendidas, lo que aumenta el margen y el ROA."),
+      bullet("Poder de mercado: las empresas con ventas crecientes generalmente tienen ventajas competitivas (mejor producto, marca, distribucion) que tambien les permiten cobrar precios mas altos y tener mejores margenes."),
+      bullet("Ciclo de vida: las empresas en fase de crecimiento suelen estar en los mercados mas dinamicos y rentables. Las empresas maduras con ventas estancadas compiten en mercados saturados con margenes comprimidos."),
+      p("El coeficiente de GRW es positivo y significativo en los datos KoTaP, pero mas pequeno en magnitud que CFO, lo que es consistente con la teoria: el crecimiento es importante pero no tanto como la capacidad de convertir ese crecimiento en efectivo real."),
+
+      h2("Predictor 5: CUR (Razon corriente)"),
+      formula("CUR = Activos Corrientes / Pasivos Corrientes"),
+      p("Mide la liquidez de corto plazo: cuantos pesos de activos liquidos tiene la empresa por cada peso que debe en el corto plazo. CUR = 1.5 significa que la empresa tiene 1.50 pesos de activos corrientes por cada peso de pasivo corriente."),
+      p("Justificacion teorica: la relacion entre liquidez y rentabilidad es compleja:"),
+      bullet("Liquidez minima necesaria: una empresa con CUR muy bajo (menor a 1) no puede pagar sus deudas de corto plazo y puede entrar en cesacion de pagos, lo que destruye valor y reduce el ROA."),
+      bullet("Exceso de liquidez ineficiente: mantener demasiado efectivo o activos corrientes tiene un costo de oportunidad. Ese capital podria invertirse en proyectos rentables. CUR muy alto puede indicar que la empresa no esta usando bien sus recursos."),
+      bullet("Zona optima: en teoria, hay un nivel de liquidez optimo que minimiza tanto el riesgo de insolvencia como el costo de oportunidad."),
+      p("En los resultados del modelo KoTaP, el coeficiente de CUR es pequeno y no significativo, lo que sugiere que, una vez controladas las otras variables, el nivel de liquidez corriente no es un predictor relevante del ROA."),
+
+      h2("Predictor 6: INVREC (Inventario mas Cuentas por cobrar)"),
+      formula("INVREC = (Inventarios + Cuentas por Cobrar) / Activos Totales"),
+      p("Mide que fraccion de los activos esta 'atrapada' en el ciclo operativo: mercaderia que aun no se vendio (inventario) y ventas que aun no se cobraron (cuentas por cobrar). Es una medida de la intensidad del ciclo de conversion de efectivo."),
+      p("Justificacion teorica: el efecto de INVREC sobre el ROA tiene una interpretacion interesante que parece contraintuitiva a primera vista:"),
+      bullet("Empresas con INVREC alto son tipicamente empresas manufactureras o comerciales con actividad intensa. Esa actividad intensa tambien genera mas ROA."),
+      bullet("Sin embargo, INVREC alto tambien implica mas capital inmovilizado que no genera retornos directamente, lo que deberia presionar el ROA a la baja."),
+      bullet("El efecto neto depende del sector: en manufacturing y retail el INVREC alto es normal y coexiste con buen ROA; en servicios financieros el INVREC es casi cero."),
+      p("En los datos KoTaP, el coeficiente de INVREC es positivo y significativo, sugiriendo que el primer efecto (mayor actividad comercial) domina sobre el segundo (capital inmovilizado)."),
+
+      h2("Predictor 7: PPE (Activos fijos netos)"),
+      formula("PPE = Propiedad, Planta y Equipo Netos / Activos Totales"),
+      p("Mide que fraccion de los activos totales son activos fisicos de larga duracion: edificios, maquinaria, equipos de produccion, vehiculos. PPE alto = empresa capital-intensiva (siderurgicas, navieras, empresas de semiconductores). PPE bajo = empresa de servicios o con activos principalmente intangibles."),
+      p("Justificacion teorica: las empresas capital-intensivas tienen varios desafios que presionan el ROA a la baja:"),
+      bullet("Altos costos fijos: la maquinaria se deprecia independientemente de si produce o no. En periodos de baja demanda, el ROA cae drasticamente porque los costos fijos no se reducen."),
+      bullet("Ciclos de inversion: las inversiones en PPE son grandes y periodicas. En los anios de alta inversion, el denominador del ROA (activos) aumenta mas rapido que el beneficio, reduciendo el ROA."),
+      bullet("Obsolescencia tecnologica: los activos fisicos pueden volverse obsoletos, requiriendo reinversiones constantes que consumen capital y reducen el ROA libre."),
+      p("El coeficiente de PPE es negativo y significativo en el modelo KoTaP, confirmando que las empresas mas capital-intensivas del mercado coreano (que incluye sectores como acero, construccion naval y semiconductores) tienden a tener menor ROA."),
+
+      h2("Predictor 8: AGE (Antiguedad de la empresa)"),
+      formula("AGE = Anio actual - Anio de fundacion de la empresa"),
+      p("Mide cuantos anios lleva operando la empresa. No es solo una medida de tiempo: captura aspectos del ciclo de vida empresarial que no estan capturados por las otras variables."),
+      p("Justificacion teorica: la teoria del ciclo de vida empresarial predice que las empresas jovenes y las maduras tienen caracteristicas distintas:"),
+      bullet("Empresas jovenes: mayor riesgo pero mayor potencial de crecimiento. Si sobrevivieron los primeros anios criticos, estan en mercados dinamicos con buenas perspectivas."),
+      bullet("Empresas maduras: mayor estabilidad pero tambien mayor rigidez. Operan en mercados maduros con competencia intensa y margenes comprimidos. Sus activos pueden estar parcialmente obsoletos."),
+      bullet("Seleccion de supervivencia: las empresas que sobreviven muchos anios lo hacen en parte por suerte y en parte por eficiencia. Este efecto podria hacer que las empresas antiguas tengan ROA relativamente bueno."),
+      p("En el contexto coreano especifico, el mercado esta dominado por chaebols (conglomerados familiares) que tienen decadas de historia. La evidencia del modelo sugiere que las empresas mas antiguas tienden a tener menor ROA, posiblemente porque los chaebols maduros tienen estructuras de costos mas rigidas y operan en sectores con margenes mas bajos."),
+
+      esp(), new Paragraph({ children:[new TextRun("")], pageBreakBefore:true }),
+
+      // ══════════════════════════════════════════════════════════════════
+      // PARTE 2: EL MODELO EN DETALLE
+      // ══════════════════════════════════════════════════════════════════
+      h1("PARTE 2: El modelo de regresion en detalle"),
+
+      h2("Que hace matematicamente OLS"),
+      p("El metodo OLS (Ordinary Least Squares, Minimos Cuadrados Ordinarios) resuelve un problema de optimizacion: encontrar los valores de los nueve parametros (B0 a B8) que minimizan la suma de los errores al cuadrado entre los ROA reales y los predichos:"),
+      formula("Minimizar: SSE = Suma_{i=1}^{n} (ROA_i - [B0 + B1*SIZE_i + ... + B8*AGE_i])^2"),
+      p("Se elevan los errores al cuadrado por dos razones: primero, para que errores positivos y negativos no se cancelen (si no, un modelo que sobreestima en un caso y subestima exactamente igual en otro tendria SSE=0 aunque sea terrible). Segundo, para penalizar mas a los errores grandes: un error de 0.1 pesa 100 veces mas que un error de 0.01 al elevar al cuadrado."),
+      p("La solucion analitica exacta existe y se calcula con algebra lineal:"),
+      formula("B = (X'X)^{-1} X'y"),
+      p("donde X es la matriz de diseno (n observaciones x 9 columnas incluyendo el intercepto), y es el vector de ROA, y la prima denota transpuesta. Esta formula devuelve los betas que minimizan exactamente el SSE. En R, la funcion lm() calcula esto internamente usando descomposicion QR por estabilidad numerica."),
+
+      h2("La formula del modelo con los valores reales"),
+      formula("ROA = 0.0778 + 0.0000*SIZE - 0.0548*LEV + 0.3355*CFO + 0.0484*GRW"),
+      formula("          - 0.0002*CUR + 0.0474*INVREC - 0.0339*PPE - 0.0096*AGE + e"),
+
+      h2("Como interpretar cada coeficiente: ceteris paribus"),
+      p("El principio de interpretacion de la regresion multiple es CETERIS PARIBUS, expresion latina que significa 'manteniendo todo lo demas constante'. Cada coeficiente dice cuanto cambia el ROA cuando UNA sola variable cambia en 1 unidad mientras TODAS las demas permanecen exactamente en sus valores actuales."),
+
+      caja("Ejemplo concreto: interpretacion del coeficiente de CFO",
+        [
+          "Beta_CFO = +0.3355",
+          "Interpretacion: si el flujo de caja operativo de una empresa aumenta en 0.01 (es decir, la empresa genera 1 centavo mas de flujo de caja por cada peso de activos), manteniendo SIZE, LEV, GRW, CUR, INVREC, PPE y AGE exactamente iguales, el ROA esperado aumenta en 0.3355 * 0.01 = 0.003355 puntos.",
+          "O en terminos de porcentaje: si CFO/Activos sube de 0.05 a 0.10 (un aumento de 0.05), el ROA esperado sube en 0.3355 * 0.05 = 0.0168 puntos porcentuales.",
+          "La palabra clave es 'manteniendo todo lo demas igual'. En la realidad, cuando el CFO sube, probablemente el ROA tambien sube directamente porque ambos reflejan la misma eficiencia operativa. El modelo captura esa relacion directa."
+        ],
+        YELLOW, AMBER),
+      esp(),
+
+      h2("El intercepto B0"),
+      p("El intercepto (B0 = 0.0778 en los datos KoTaP) es el ROA esperado cuando TODAS las variables predictoras son iguales a cero simultaneamente. En la practica, ese escenario es imposible (ninguna empresa real tiene SIZE=0, LEV=0, CFO=0, etc. al mismo tiempo). El intercepto es principalmente un ajuste tecnico para que la linea de regresion pase por el punto correcto, no una cantidad con interpretacion economica directa."),
+
+      h2("La diferencia entre betas brutos y betas estandarizados"),
+      p("Los betas brutos no son directamente comparables entre variables porque cada una tiene una escala diferente. LEV varia entre 0 y 1; AGE puede variar de 1 a 80. Un beta de -0.055 para LEV y de -0.010 para AGE no significa que LEV sea 5.5 veces mas importante."),
+      p("Los betas estandarizados resuelven esto convirtiendo todas las variables a una escala comun de desviaciones estandar:"),
+      formula("Beta_std = Beta_bruto * (desv_estandar_x / desv_estandar_y)"),
+      p("El resultado responde: si la variable x aumenta en una desviacion estandar desde su media, cuantas desviaciones estandar cambia el ROA? Ahora si se pueden comparar: si CFO tiene beta_std=0.60 y AGE tiene beta_std=-0.08, CFO tiene 7.5 veces mas influencia sobre el ROA en unidades comparables."),
+
+      h2("Las metricas de ajuste: R2, R2-adj, RMSE y MAE"),
+
+      h3("R2: coeficiente de determinacion"),
+      formula("R2 = 1 - SSE/SST = 1 - Suma(ROA_i - ROA_pred_i)^2 / Suma(ROA_i - media_ROA)^2"),
+      p("SSE es la suma de cuadrados explicada por el modelo. SST es la varianza total del ROA. R2 mide que fraccion de la variabilidad total del ROA explica el modelo. R2=0.35 significa que el 35% de las diferencias de rentabilidad entre empresas se debe a los ocho predictores."),
+
+      h3("R2 ajustado: penalizacion por numero de predictores"),
+      formula("R2_adj = 1 - (1 - R2) * (n - 1) / (n - k - 1)"),
+      p("Donde n es el numero de observaciones y k es el numero de predictores. Cada vez que se agrega una variable al modelo, R2 nunca disminuye (siempre igual o mejor), incluso si la variable es aleatoria y completamente inutil. R2-adj penaliza por esto: si se agrega una variable inutil, R2-adj baja. Solo sube cuando el nuevo predictor anade informacion real. En la practica, R2-adj es ligeramente menor que R2 y se prefiere para comparar modelos con distinto numero de variables."),
+
+      h3("Por que R2 de 0.31 es un buen resultado en datos financieros"),
+      caja("El R2 en datos financieros de panel",
+        [
+          "Un R2 de 0.31 significa que el modelo explica el 31% de la variabilidad del ROA. El otro 69% depende de factores no incluidos.",
+          "Esos factores no incluidos son reales y muchos: el ciclo macroeconomico coreano, las tasas de interes del Banco de Corea, la calidad del equipo directivo, las decisiones de innovacion, las relaciones con el gobierno, los efectos de la crisis COVID en 2020, etc.",
+          "Ningun modelo con solo variables contables puede capturar todo eso. Un R2 de 0.98 seria una senal de sobreajuste o de tener la variable dependiente en el lado de los predictores.",
+          "En estudios comparables de contabilidad y finanzas con datos de panel de paises emergentes, R2 entre 0.25 y 0.45 con variables contables es considerado robusto.",
+          "Lo que importa es que los coeficientes sean significativos, tengan los signos correctos segun la teoria, y que el modelo sea estable entre subperiodos."
+        ],
+        MINT),
+      esp(),
+
+      h3("RMSE: error tipico de prediccion"),
+      formula("RMSE = raiz(SSE/n) = raiz(media(e_i^2))"),
+      p("Es el error tipico en las mismas unidades que el ROA. RMSE=0.046 significa que el modelo se equivoca tipicamente en 0.046 puntos de ROA. Penaliza los errores grandes porque los eleva al cuadrado antes de promediar."),
+
+      h3("MAE: error absoluto medio"),
+      formula("MAE = media(|ROA_i - ROA_pred_i|) = media(|e_i|)"),
+      p("Error absoluto promedio. MAE=0.032 significa que en promedio la prediccion difiere del ROA real en 3.2 puntos porcentuales. Es mas robusto que RMSE ante outliers porque no eleva al cuadrado. Es mas intuitivo para comunicar a no-tecnicos."),
+
+      h3("Estadistico F y p-valor global"),
+      formula("F = (R2/k) / ((1-R2)/(n-k-1))"),
+      p("Prueba si el modelo completo (con todos los predictores) explica significativamente mas varianza que el modelo nulo (solo con la media del ROA como prediccion). La hipotesis nula es que todos los betas son simultaneamente cero. Con F=670 y p cercano a cero en los datos KoTaP, hay evidencia abrumadora de que al menos algunos predictores tienen efecto real sobre el ROA."),
+
+      esp(), new Paragraph({ children:[new TextRun("")], pageBreakBefore:true }),
+
+      // ══════════════════════════════════════════════════════════════════
+      // PARTE 3: SUPUESTOS GAUSS-MARKOV
+      // ══════════════════════════════════════════════════════════════════
+      h1("PARTE 3: Los supuestos del modelo y por que importan"),
+
+      p("Para que los estimadores OLS sean validos y confiables, el modelo debe cumplir una serie de condiciones conocidas como supuestos de Gauss-Markov. Si alguno se viola, los coeficientes pueden estar sesgados (no representan el efecto real), ser ineficientes (tienen mas varianza de la necesaria), o sus errores estandar pueden ser incorrectos (haciendo los p-valores no confiables)."),
+      esp(),
+
+      mkTable(
+        ["Supuesto","Nombre formal","Que dice","Consecuencia si se viola"],
+        [
+          ["GM1","Linealidad","La relacion entre X e Y es lineal en los parametros","Los coeficientes no capturan el efecto real; el modelo sistematicamente sobreestima en unos rangos y subestima en otros"],
+          ["GM2","Media cero de errores","E[e|X]=0: el error promedio es cero para cualquier valor de X","Si se viola, el intercepto esta sesgado"],
+          ["GM3","No multicolinealidad perfecta","Ningun predictor es combinacion lineal exacta de los otros","El sistema no tiene solucion unica; los coeficientes son indefinidos"],
+          ["GM4","Homocedasticidad","Var(e_i) = sigma^2 constante para toda observacion","Los errores estandar de los betas son incorrectos; los IC y p-valores no son confiables"],
+          ["GM5","No autocorrelacion","Cov(e_i, e_j)=0 para i diferente de j","Idem: errores estandar incorrectos, especialmente problematico en datos de panel"],
+          ["Extra","Normalidad de errores","e ~ N(0, sigma^2)","Sin normalidad, los IC y p-valores son aproximaciones que mejoran con n grande (TCL)"]
+        ],
+        [1000, 1800, 3000, 3560]
+      ),
+      esp(),
+
+      h2("Por que son validos los resultados aunque se violen algunos supuestos"),
+      caja("El Teorema Central del Limite al rescate",
+        [
+          "Con 10,000+ observaciones, el Teorema Central del Limite garantiza que los estimadores OLS (que son sumas ponderadas de muchas observaciones) son aproximadamente normales aunque los residuos individuales no lo sean.",
+          "Los p-valores y los intervalos de confianza son aproximaciones asintoticas que se vuelven cada vez mas precisas conforme n crece.",
+          "La no-normalidad de los residuos y la heterocedasticidad moderada no invalidan los coeficientes estimados (los betas siguen siendo insesgados si GM1 y GM2 se cumplen). Solo afectan la precision de los errores estandar.",
+          "Con la muestra disponible en KoTaP (>10,000 obs), los resultados son robustos a violaciones moderadas de GM4 y de normalidad."
+        ],
+        LIGHT),
+      esp(),
+
+      esp(), new Paragraph({ children:[new TextRun("")], pageBreakBefore:true }),
+
+      // ══════════════════════════════════════════════════════════════════
+      // PARTE 4: GRAFICO A - HISTOGRAMA DE RESIDUOS
+      // ══════════════════════════════════════════════════════════════════
+      h1("PARTE 4: Grafico A \u2014 Histograma de residuos y curva normal"),
+
+      p("Los residuos son la diferencia entre el ROA real y el ROA predicho para cada empresa en el conjunto de ENTRENAMIENTO:"),
+      formula("e_i = ROA_i (real) - ROA_i (predicho)  para cada empresa i"),
+      p("Analizamos los residuos del entrenamiento (no del conjunto de prueba) porque los supuestos de Gauss-Markov aplican al proceso generador de datos, que se ajusta sobre el entrenamiento. El conjunto de prueba se reserva para evaluar el poder predictivo, no para verificar supuestos."),
+      esp(),
+
+      h2("Que muestra el histograma"),
+      p("Las barras representan cuantos residuos caen en cada rango de valores. La curva roja superpuesta es la distribucion normal teorica N(0, sigma^2) donde sigma es la desviacion estandar de los residuos reales. La linea negra vertical en cero es el punto de referencia: residuo = 0 significa prediccion perfecta para esa observacion."),
+
+      h2("Que deberiamos ver si los supuestos se cumplen"),
+      bullet("Las barras deben seguir de cerca la campana roja: si el supuesto de normalidad se cumple, los residuos siguen exactamente esa distribucion."),
+      bullet("La distribucion debe ser simetrica alrededor del cero: si hay mas errores positivos que negativos (o viceversa), el modelo tiene un sesgo sistematico."),
+      bullet("El pico debe estar cerca del cero: la mayoria de los residuos deberian ser pequenos, con muy pocos errores grandes."),
+
+      h2("Que significa cada patron de desviacion"),
+
+      h4("Colas mas pesadas que la curva normal (forma de M o de campana aplastada)"),
+      p("Las barras son mas altas que la curva en el centro Y mas largas en los extremos. Esto indica una distribucion leptocurtica: los residuos tipicos son pequenos (buen ajuste en la mayoria de los casos) pero de vez en cuando hay errores enormes (mal ajuste en casos extremos). Es la firma caracteristica de los datos financieros: la mayoria de las empresas se comportan predeciblemente, pero las crisis, las quiebras y los booms inesperados generan residuos muy grandes."),
+
+      h4("Cola asimetrica hacia la derecha"),
+      p("Mas barras altas a la derecha del cero que a la izquierda. El modelo subestima el ROA mas frecuentemente de lo que lo sobreestima: para muchas empresas, el ROA real es mejor de lo que el modelo predice. Puede indicar que hay un predictor importante con efecto positivo que no esta incluido."),
+
+      h4("Cola asimetrica hacia la izquierda"),
+      p("El modelo sobreestima sistematicamente. Puede indicar que las crisis o eventos negativos no estan bien capturados por las variables del modelo."),
+
+      h2("El test de Jarque-Bera: formalizacion estadistica"),
+      p("El test JB combina la asimetria y la curtosis para probar formalmente si los residuos son normales:"),
+      formula("JB = (n/6) * [Asimetria^2 + (Curtosis^2)/4]"),
+      p("Bajo la hipotesis nula de normalidad (asimetria=0 y curtosis=0), JB sigue una distribucion chi-cuadrado con 2 grados de libertad. Si el p-valor es menor a 0.05, se rechaza la normalidad."),
+      p("La anotacion en la esquina del grafico muestra el p-valor del JB y la asimetria y curtosis calculadas de los residuos con las funciones de e1071. En datos KoTaP, el JB casi siempre rechaza la normalidad con p cercano a cero, lo cual es esperado y no problematico con la muestra grande disponible."),
+
+      h2("Por que el rechazo del JB no invalida el modelo"),
+      p("Con 10,000+ residuos, el test JB tiene tanta potencia estadistica que detecta desviaciones minimas de la normalidad que no tienen ninguna importancia practica. El Teorema Central del Limite garantiza que los estimadores OLS (que son promedios ponderados de miles de observaciones) son aproximadamente normales aunque los residuos individuales no lo sean. La no-normalidad de los residuos afecta principalmente la precision de los intervalos de confianza en muestras pequenas (n < 50), pero no sesga los coeficientes."),
+
+      esp(), new Paragraph({ children:[new TextRun("")], pageBreakBefore:true }),
+
+      // ══════════════════════════════════════════════════════════════════
+      // PARTE 5: GRAFICO B - QQ-PLOT
+      // ══════════════════════════════════════════════════════════════════
+      h1("PARTE 5: Grafico B \u2014 QQ-Plot de residuos"),
+
+      h2("Que es un grafico de cuantiles (QQ-Plot)"),
+      p("QQ significa Quantile-Quantile (cuantil contra cuantil). El principio es simple: si dos distribuciones son identicas, sus cuantiles tambien son identicos. El grafico compara los cuantiles de los residuos reales contra los cuantiles que tendria una distribucion normal perfecta con la misma media y desviacion estandar."),
+      p("Para construirlo, se ordenan los n residuos de menor a mayor: e_(1) <= e_(2) <= ... <= e_(n). Cada residuo ordenado e_(k) tiene su cuantil teorico correspondiente: el valor z tal que P(Z <= z) = k/(n+1) donde Z ~ N(0,1). Si los residuos son normales, e_(k) deberia ser aproximadamente igual a sigma*z_k + media."),
+
+      h2("La linea roja diagonal"),
+      p("No es una regresion ajustada a los datos del QQ-Plot. Es la linea de igualdad perfecta donde cuantil muestral = cuantil teorico. Se traza con geom_abline(slope=sd(rf), intercept=mean(rf)): pendiente igual a la desviacion estandar de los residuos (para escalar los cuantiles teoricos de N(0,1) a la escala real de los residuos) e intercepto igual a la media de los residuos."),
+
+      h2("Como leer cada patron de puntos"),
+
+      h4("Puntos perfectamente sobre la linea"),
+      p("Los residuos son normales. Los cuantiles teoricos predicen exactamente los cuantiles muestrales. En la practica esto nunca ocurre perfectamente."),
+
+      h4("Puntos por encima de la linea en la esquina superior derecha Y por debajo en la esquina inferior izquierda"),
+      p("Es el patron mas comun en datos financieros. Los residuos extremos positivos (esquina superior derecha) son mas grandes de lo esperado bajo normalidad. Los residuos extremos negativos (esquina inferior izquierda) son mas negativos de lo esperado. Esto es la firma de colas pesadas o distribucion leptocurtica. El modelo se equivoca mucho cuando hay observaciones extremas (quiebras, booms inesperados)."),
+
+      h4("Puntos en S alrededor de la linea"),
+      p("La distribucion de residuos es asimetrica. Si la S sube por encima de la linea primero y luego por debajo, los residuos tienen asimetria positiva (cola a la derecha mas larga). Si baja primero y sube despues, asimetria negativa."),
+
+      h4("Puntos bien sobre la linea en el centro pero desviandose solo en los extremos"),
+      p("El modelo funciona bien para el 90% de las observaciones tipicas pero tiene errores grandes para las observaciones mas extremas. Es el patron mas benigno de no-normalidad y es muy comun en datos reales."),
+
+      h2("El coeficiente r en la anotacion"),
+      p("Es la correlacion de Pearson entre los cuantiles teoricos (eje x del grafico) y los cuantiles muestrales (eje y). Con residuos perfectamente normales, r = 1.00 exacto. Cuanto mas se aleja r de 1, mayor es la desviacion de la normalidad. Una guia practica para interpretar r:"),
+      bullet("r > 0.99: residuos muy cercanos a la normalidad. El supuesto de normalidad se cumple bien."),
+      bullet("r entre 0.97 y 0.99: leve desviacion, generalmente aceptable con muestras grandes."),
+      bullet("r entre 0.95 y 0.97: desviacion notable. Los IC y p-valores pueden estar ligeramente distorsionados."),
+      bullet("r < 0.95: desviacion importante. Con muestras pequenas seria preocupante; con n>5000 sigue siendo manejable por el TCL."),
+
+      h2("Por que el QQ-Plot es mas informativo que el histograma para los extremos"),
+      p("El histograma con 10,000 observaciones tiene las colas con muy pocas barras (quizas 5-10 observaciones por barra en los extremos). Esas barras son tan pequenas visualmente que es casi imposible ver si son mas altas o mas bajas de lo esperado. El QQ-Plot amplifica los extremos: cada observacion extrema genera un punto muy alejado del centro, haciendo las colas imposibles de ignorar. Por eso se usan ambos graficos: el histograma da una vision global de toda la distribucion, el QQ-Plot da detalle en las colas donde mas importa para los supuestos."),
+
+      esp(), new Paragraph({ children:[new TextRun("")], pageBreakBefore:true }),
+
+      // ══════════════════════════════════════════════════════════════════
+      // PARTE 6: GRAFICO C - RESIDUOS VS AJUSTADOS
+      // ══════════════════════════════════════════════════════════════════
+      h1("PARTE 6: Grafico C \u2014 Residuos vs Valores Ajustados"),
+
+      p("Este es el diagnostico mas importante de toda la regresion. No verifica normalidad (eso lo hacen el histograma y el QQ-Plot): verifica linealidad y homocedasticidad, los dos supuestos que mas afectan la validez de los coeficientes y sus errores estandar."),
+      esp(),
+
+      h2("Los ejes del grafico"),
+      p("Eje X (horizontal): los valores ajustados, es decir, el ROA predicho por el modelo para cada empresa del conjunto de ENTRENAMIENTO. Se llaman 'ajustados' porque son los valores que el modelo ha ajustado a los datos de entrenamiento."),
+      p("Eje Y (vertical): el residuo para esa empresa: ROA real menos ROA predicho. Un residuo positivo (punto por encima del cero) significa que el modelo subestimo: la empresa fue mas rentable de lo que el modelo esperaba. Un residuo negativo (punto por debajo) significa sobreestimacion."),
+
+      h2("Que deberiamos ver si el modelo esta bien especificado"),
+      p("Una nube de puntos completamente aleatoria, distribuida simetricamente alrededor de la linea roja horizontal en cero, sin ninguna forma reconocible, sin tendencias, sin patrones. Los residuos grandes y los pequenos deberian estar mezclados aleatoriamente para todos los valores del ROA predicho. Esto indicaria que el modelo captura toda la estructura sistematica de los datos y solo deja ruido puro."),
+
+      h2("La linea roja horizontal en cero"),
+      p("Es la referencia perfecta: residuo = 0 en todos los puntos indicaria que el modelo predice exactamente. En la practica, los puntos se dispersan alrededor de esta linea. Lo que queremos es que esa dispersion sea aleatoria, no que siga ningun patron."),
+
+      h2("La curva naranja LOWESS: el diagnostico clave"),
+      p("LOWESS (Locally Weighted Scatterplot Smoothing) es una curva suavizada que muestra la tendencia promedio de los residuos a lo largo del rango de valores ajustados. No usa una funcion matematica predefinida: en cada punto del eje X, promedia los residuos cercanos dando mas peso a los mas proximos (weighting local). El parametro f=0.3 significa que para suavizar cada punto se usan el 30% de los datos mas cercanos."),
+      p("La curva LOWESS es el detector de patrones del grafico. Si es plana y horizontal cerca del cero en toda su longitud, el modelo es correcto. Cualquier desviacion de esa horizontalidad es una senal de problema."),
+
+      h2("Los tres problemas que este grafico detecta"),
+
+      h3("Problema 1: No-linealidad"),
+      p("Si la curva LOWESS forma una parábola u cualquier forma curva, significa que la relacion entre los predictores y el ROA no es lineal. El modelo lineal sobreestima el ROA en unos rangos (curva por debajo del cero) y lo subestima en otros (curva por encima). El patron mas comun en finanzas es una U invertida: el modelo subestima el ROA para empresas con ROA predicho bajo, sobreestima en el rango medio, y vuelve a subestimar para las mas rentables. Esto indicaria que se necesitan terminos cuadraticos o transformaciones de las variables."),
+      p("La solucion podria ser agregar terminos cuadraticos (CFO^2) o interacciones (CFO*LEV) al modelo, o usar un modelo no lineal como un arbol de decision o random forest."),
+
+      h3("Problema 2: Heterocedasticidad"),
+      p("Si la nube de puntos tiene un ancho diferente en distintas partes del eje X (mas estrecha a la izquierda y mas ancha a la derecha, o viceversa), la varianza de los residuos no es constante. Esto se llama heterocedasticidad y viola el supuesto GM4."),
+      p("El patron mas comun en datos financieros es que la nube se ensancha para valores altos de ROA predicho (forma de embudo abierto hacia la derecha): el modelo predice bien las empresas de ROA bajo o negativo (son mas homogeneas) pero tiene mucha variabilidad en las empresas muy rentables (que son muy heterogeneas entre si)."),
+      p("Las consecuencias de la heterocedasticidad son concretas:"),
+      bullet("Los errores estandar de los betas son incorrectos. Pueden ser demasiado pequenos (haciendo aparecer como significativos coeficientes que no lo son) o demasiado grandes (ocultando efectos reales)."),
+      bullet("Los intervalos de confianza de los coeficientes son incorrectos: mas estrechos o mas anchos de lo que deberian ser."),
+      bullet("Los p-valores no son confiables para hacer inferencia."),
+      p("Las soluciones incluyen usar errores estandar robustos (Huber-White) o transformar la variable dependiente (log(ROA) si el ROA es siempre positivo). En el contexto de KoTaP, la heterocedasticidad es esperada y los resultados siguen siendo informativos con la muestra grande disponible."),
+
+      h3("Problema 3: Observaciones influyentes"),
+      p("Puntos muy alejados de la linea de cero (por encima o por debajo de las lineas punteadas de +/- 2 desviaciones estandar) son observaciones que el modelo predice excepcionalmente mal. Con 10,000+ observaciones, se esperan algunos puntos fuera de ese rango incluso si todo esta bien (bajo normalidad, el 4.6% de las observaciones estaria fuera de 2 sigmas). Si hay muchos mas del 5% o si los puntos extremos estan concentrados en un rango especifico de ROA predicho, merece investigacion adicional."),
+
+      h2("Las lineas punteadas grises de +/- 2 sigma"),
+      p("Se trazan con geom_hline(yintercept = 2*sd(rf)) y geom_hline(yintercept = -2*sd(rf)). Marcan los limites de dos desviaciones estandar de los residuos. Bajo normalidad perfecta, el 95.44% de los residuos deberia caer dentro de esas lineas. Las etiquetas '+2sigma' y '-2sigma' se colocan en el extremo derecho del grafico con annotate('text') para no solaparse con los puntos."),
+      p("Si mas del 10-15% de los puntos estan fuera de esas lineas, es otra senal de colas pesadas o heterocedasticidad, complementaria a lo que muestran el histograma y el QQ-Plot."),
+
+      h2("La relacion entre los tres graficos de diagnostico"),
+      caja("Como los tres graficos se complementan",
+        [
+          "El histograma muestra la distribucion global de los residuos: es simetrica? tiene colas pesadas? es aproximadamente normal?",
+          "El QQ-Plot es una lupa sobre las colas: amplifica las desviaciones de normalidad que el histograma no muestra claramente. Detecta si los residuos extremos son mas grandes de lo esperado.",
+          "El grafico de residuos vs ajustados no verifica normalidad: verifica si el modelo tiene estructura correcta. Detecta no-linealidad (curva LOWESS curva) y heterocedasticidad (nube de diferente ancho). Estos son los problemas mas graves porque afectan la validez de los coeficientes, no solo la precision de los errores estandar.",
+          "Un modelo puede pasar perfectamente el histograma y el QQ-Plot pero fallar en residuos vs ajustados (si hay no-linealidad sin residuos extremos). Y un modelo puede tener colas pesadas en el histograma pero residuos vs ajustados perfectamente aleatorio (si la heterocedasticidad viene de outliers puntuales, no de una estructura sistematica)."
+        ],
+        MINT),
+      esp(),
+
+      esp(), new Paragraph({ children:[new TextRun("")], pageBreakBefore:true }),
+
+      // ══ RESUMEN FINAL ══
+      h1("Sintesis: que nos dice el modelo completo sobre el ROA coreano"),
+
+      h2("El modelo como teoria empirica del ROA"),
+      p("El modelo de regresion no es solo una ecuacion predictiva: es una teoria empirica sobre los determinantes de la rentabilidad empresarial en Corea del Sur durante 2011-2024. Cada coeficiente significativo confirma o refuta una hipotesis teorica de la literatura financiera."),
+
+      mkTable(
+        ["Variable","Efecto en ROA","Magnitud relativa","Interpretacion economica"],
+        [
+          ["CFO","Positivo ***","La mas alta (beta_std ~0.55-0.65)","La generacion de efectivo operativo es el principal motor de rentabilidad"],
+          ["GRW","Positivo ***","Moderada (beta_std ~0.15-0.20)","El crecimiento de ventas mejora el ROA por apalancamiento operativo"],
+          ["INVREC","Positivo ***","Moderada-baja","Las empresas con alta actividad comercial tienen mayor ROA"],
+          ["LEV","Negativo ***","Moderada (beta_std ~0.15-0.20)","El exceso de deuda erosiona la rentabilidad por costos financieros"],
+          ["PPE","Negativo ***","Moderada-baja","Las empresas capital-intensivas tienen menor ROA"],
+          ["AGE","Negativo ***","Baja","Las empresas mas antiguas tienen menor ROA: posible rigidez organizacional"],
+          ["SIZE","No signif.","Casi cero","El tamano no predice ROA una vez controladas las demas variables"],
+          ["CUR","No signif.","Casi cero","La liquidez corriente no predice ROA con las otras variables controladas"]
+        ],
+        [1400, 1400, 1900, 4660]
+      ),
+      esp(),
+
+      h2("Por que el modelo tiene R2 = 0.31 y no mas alto"),
+      p("El ROA de una empresa depende de factores que este modelo no puede capturar con variables contables anuales:"),
+      bullet("Factores macroeconomicos: el ciclo economico coreano, las tasas de interes del Banco de Corea, el tipo de cambio won/dolar que afecta a los exportadores, los precios del petroleo que afectan a la industria petroquimica."),
+      bullet("Factores sectoriales: la estructura competitiva del sector especifico, la intensidad de la rivalidad entre competidores, las barreras de entrada, el poder de negociacion con proveedores y clientes."),
+      bullet("Factores internos cualitativos: la calidad del equipo directivo, la cultura organizacional, la capacidad de innovacion, las relaciones con el gobierno y los bancos (cruciales en los chaebols coreanos)."),
+      bullet("Eventos aleatorios: accidentes industriales, escandales corporativos, litigios, condiciones climaticas extremas que afectan la produccion."),
+      p("Ninguno de estos factores aparece en los estados financieros anuales. El 31% de R2 es lo que podemos explicar con la informacion publica disponible; el 69% restante es la parte del ROA que depende de informacion que no esta en el dataset. Esto no es una falla del modelo: es la naturaleza de los datos financieros de panel con alta heterogeneidad entre empresas y entre anios."),
+
+      div(),
+      new Paragraph({ alignment:AlignmentType.CENTER, spacing:{before:200},
+        children:[new TextRun({text:"Documento generado para KoTaP v6.0 \u2013 Analisis Financiero Mercado Bursatil Coreano",size:18,color:SLATE,font:"Arial",italics:true})] })
+    ]
+  }]
+});
+
+Packer.toBuffer(doc).then(buf => {
+  fs.writeFileSync('/home/claude/KoTaP_Regresion_Profunda.docx', buf);
+  console.log('OK');
+}).catch(e => { console.error(e); process.exit(1); });

@@ -1,0 +1,51 @@
+{
+  "dataset": {
+    "n": 12653,
+    "companies": 1754,
+    "years": "2011–2024"
+  },
+  "models": {
+    "OLS": {
+      "R2": 0.2832,
+      "RMSE": 0.0465,
+      "MAE": 0.0318
+    },
+    "OLS-RFE": {
+      "R2": 0.2831,
+      "RMSE": 0.0465,
+      "MAE": 0.0318
+    },
+    "DecisionTree": {
+      "R2": 0.2972,
+      "RMSE": 0.046,
+      "MAE": 0.0319
+    },
+    "Ridge": {
+      "R2": 0.2847,
+      "RMSE": 0.0464,
+      "MAE": 0.0319
+    },
+    "Lasso": {
+      "R2": 0.2834,
+      "RMSE": 0.0465,
+      "MAE": 0.0318
+    }
+  },
+  "best_model": "DecisionTree",
+  "gauss_markov": {
+    "shapiro_p": 1.4945e-50,
+    "breusch_pagan": 2.2449e-32,
+    "vif_max": 1.6997,
+    "durbin_watson": 1.502
+  },
+  "correlations_roa": {
+    "SIZE": -0.1453,
+    "LEV": -0.1954,
+    "CFO": 0.478,
+    "GRW": 0.2697,
+    "CUR": 0.2414,
+    "INVREC": 0.0804,
+    "PPE": 0.0283,
+    "AGE": -0.2175
+  }
+}
