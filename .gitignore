@@ -24,3 +24,7 @@ data/
 .DS_Store
 Thumbs.db
 desktop.ini
+.Rproj.user
+
+# Agent local artifacts
+.atl/
